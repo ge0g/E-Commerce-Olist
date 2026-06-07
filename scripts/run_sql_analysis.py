@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sqlite3
 
 import pandas as pd
@@ -11,6 +12,10 @@ DATABASE_PATH = PROJECT_ROOT / "data" / "processed" / "olist_analytics.db"
 SQL_FILE_PATH = PROJECT_ROOT / "sql" / "analysis_queries.sql"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 SQL_RESULTS_PATH = REPORTS_DIR / "sql_results.md"
+
+
+def clean_title(title: str) -> str:
+    return re.sub(r"^\d+\.\s*", "", title).strip()
 
 
 def split_sql_queries(sql_text: str) -> list[tuple[str, str]]:
@@ -26,7 +31,7 @@ def split_sql_queries(sql_text: str) -> list[tuple[str, str]]:
                 query = "\n".join(current_query_lines).strip()
 
                 if query:
-                    queries.append((current_title, query))
+                    queries.append((clean_title(current_title), query))
 
                 current_query_lines = []
 
@@ -39,7 +44,7 @@ def split_sql_queries(sql_text: str) -> list[tuple[str, str]]:
         query = "\n".join(current_query_lines).strip()
 
         if query:
-            queries.append((current_title, query))
+            queries.append((clean_title(current_title), query))
 
     return queries
 
@@ -59,11 +64,11 @@ def format_value(value) -> str:
     return str(value)
 
 
-def dataframe_to_markdown(dataframe: pd.DataFrame) -> str:
+def dataframe_to_markdown(dataframe: pd.DataFrame, max_rows: int = 10) -> str:
     if dataframe.empty:
         return "_Запрос не вернул строк._"
 
-    preview = dataframe.head(20)
+    preview = dataframe.head(max_rows)
     columns = [str(column) for column in preview.columns]
 
     header = "| " + " | ".join(columns) + " |"
@@ -77,11 +82,9 @@ def dataframe_to_markdown(dataframe: pd.DataFrame) -> str:
 
 
 def build_report_section(query_number: int, title: str, result: pd.DataFrame) -> str:
-    return (
-        f"## {query_number}. {title}\n\n"
-        f"Показаны первые 20 строк результата.\n\n"
-        f"{dataframe_to_markdown(result)}\n"
-    )
+    rows_note = "Показаны первые 10 строк результата."
+
+    return f"## {query_number}. {title}\n\n" f"{rows_note}\n\n" f"{dataframe_to_markdown(result)}\n"
 
 
 def main() -> None:
@@ -107,13 +110,12 @@ def main() -> None:
     ]
 
     for query_number, (title, query) in enumerate(queries, start=1):
+        result = run_query(query)
+
         print("=" * 80)
         print(f"{query_number}. {title}")
         print("=" * 80)
-
-        result = run_query(query)
-
-        print(result.head(20))
+        print(result.head(10))
         print()
 
         report_sections.append(build_report_section(query_number, title, result))
