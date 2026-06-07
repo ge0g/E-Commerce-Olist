@@ -9,6 +9,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATABASE_PATH = PROJECT_ROOT / "data" / "processed" / "olist_analytics.db"
 SQL_FILE_PATH = PROJECT_ROOT / "sql" / "analysis_queries.sql"
+REPORTS_DIR = PROJECT_ROOT / "reports"
+SQL_RESULTS_PATH = REPORTS_DIR / "sql_results.md"
 
 
 def split_sql_queries(sql_text: str) -> list[tuple[str, str]]:
@@ -47,6 +49,41 @@ def run_query(query: str) -> pd.DataFrame:
         return pd.read_sql_query(query, connection)
 
 
+def format_value(value) -> str:
+    if pd.isna(value):
+        return ""
+
+    if isinstance(value, float):
+        return f"{value:,.2f}"
+
+    return str(value)
+
+
+def dataframe_to_markdown(dataframe: pd.DataFrame) -> str:
+    if dataframe.empty:
+        return "_Запрос не вернул строк._"
+
+    preview = dataframe.head(20)
+    columns = [str(column) for column in preview.columns]
+
+    header = "| " + " | ".join(columns) + " |"
+    separator = "| " + " | ".join(["---"] * len(columns)) + " |"
+
+    rows = [
+        "| " + " | ".join(format_value(value) for value in row) + " |" for row in preview.to_numpy()
+    ]
+
+    return "\n".join([header, separator, *rows])
+
+
+def build_report_section(query_number: int, title: str, result: pd.DataFrame) -> str:
+    return (
+        f"## {query_number}. {title}\n\n"
+        f"Показаны первые 20 строк результата.\n\n"
+        f"{dataframe_to_markdown(result)}\n"
+    )
+
+
 def main() -> None:
     if not DATABASE_PATH.exists():
         raise FileNotFoundError(f"База не найдена: {DATABASE_PATH}")
@@ -54,8 +91,20 @@ def main() -> None:
     if not SQL_FILE_PATH.exists():
         raise FileNotFoundError(f"SQL-файл не найден: {SQL_FILE_PATH}")
 
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
     sql_text = SQL_FILE_PATH.read_text(encoding="utf-8")
     queries = split_sql_queries(sql_text)
+
+    report_sections = [
+        "# SQL-проверка ключевых метрик",
+        (
+            "Файл содержит результаты SQL-запросов из `sql/analysis_queries.sql`.\n\n"
+            "SQL используется как независимый проверочный слой для ключевых метрик проекта. "
+            "Запросы выполняются по подготовленной SQLite-базе за тот же период, что и основной "
+            "бизнес-анализ: **2017-01 — 2018-07**."
+        ),
+    ]
 
     for query_number, (title, query) in enumerate(queries, start=1):
         print("=" * 80)
@@ -66,6 +115,12 @@ def main() -> None:
 
         print(result.head(20))
         print()
+
+        report_sections.append(build_report_section(query_number, title, result))
+
+    SQL_RESULTS_PATH.write_text("\n\n---\n\n".join(report_sections), encoding="utf-8")
+
+    print(f"SQL-результаты сохранены: {SQL_RESULTS_PATH}")
 
 
 if __name__ == "__main__":
