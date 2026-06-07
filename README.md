@@ -96,6 +96,8 @@ data/raw/
 
 ## Структура проекта
 
+## Структура проекта
+
 ```text
 E-Commerce Olist/
 ├── data/
@@ -105,6 +107,7 @@ E-Commerce Olist/
 │       └── .gitkeep
 │
 ├── notebooks/
+│   ├── README.md
 │   ├── 01_data_overview.ipynb
 │   ├── 02_data_preparation.ipynb
 │   └── 03_business_analysis.ipynb
